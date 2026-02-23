@@ -3,7 +3,7 @@
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QTextEdit, QFrame
+    QPushButton, QLabel, QTextEdit, QFrame, QFileDialog, QMessageBox, QInputDialog
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -42,8 +42,6 @@ class DNAAnalyzerGUI(QMainWindow):
             btn.setFixedHeight(35)
             menu_layout.addWidget(btn)
 
-        main_layout.addWidget(menu_panel)
-
         # =========================
         # 2. ŚRODKOWA CZĘŚĆ (LEWA + CENTRUM)
         # =========================
@@ -68,10 +66,20 @@ class DNAAnalyzerGUI(QMainWindow):
             "Eskportuj CSV/PDF"
         ]
 
+        self.load_button = None
+
         for name in side_buttons:
             btn = QPushButton(name)
             btn.setFixedHeight(40)
             side_layout.addWidget(btn)
+
+            if name == "Wczytaj plik":
+                self.load_button = btn
+
+        if self.load_button is not None:
+            self.load_button.clicked.connect(self.load_sequence)
+        else:
+            print("Błąd: przycisk 'Wczytaj plik' nie został znaleziony!")
 
         middle_layout.addWidget(side_panel)
 
@@ -128,6 +136,79 @@ class DNAAnalyzerGUI(QMainWindow):
 
         main_layout.addWidget(log_panel)
 
+    def load_sequence(self):
+        options = QMessageBox(self)
+        options.setWindowTitle("Wczytaj sekwencję")
+        options.setText("Wybierz sposób wczytania:")
+
+        file_button = options.addButton("Wczytaj plik FASTA", QMessageBox.ButtonRole.ActionRole)
+        manual_button = options.addButton("Wpisz ręcznie", QMessageBox.ButtonRole.ActionRole)
+        options.addButton("Anuluj", QMessageBox.ButtonRole.RejectRole)
+
+        options.exec()
+        clicked = options.clickedButton()
+
+        if clicked == file_button:
+            self.load_from_file()
+        elif clicked == manual_button:
+            self.manual_input()
+
+
+    def load_from_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Wybierz plik FASTA",
+            "",
+            "FASTA Files (*.fasta *.fa *.txt)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, "r") as file:
+                lines = file.readlines()
+
+            sequence = ""
+            for line in lines:
+                if not line.startswith(">"):
+                    sequence += line.strip()
+
+            sequence = sequence.upper()
+
+            if not self.validate_sequence(sequence):
+                QMessageBox.warning(self, "Błąd", "Niepoprawne znaki DNA.")
+                return
+
+            self.sequence_view.setPlainText(sequence)
+            self.log_output.append(f"Wczytano plik: {file_path}")
+            self.log_output.append(f"Długość sekwencji: {len(sequence)}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Błąd", str(e))
+
+
+    def manual_input(self):
+        text, ok = QInputDialog.getMultiLineText(
+            self,
+            "Wpisz sekwencję DNA",
+            "Podaj sekwencję, używając znaków A, T, C, G:"
+        )
+
+        if ok and text:
+            sequence = text.replace("\n", "").replace(" ", "").upper()
+
+            if not self.validate_sequence(sequence):
+                QMessageBox.warning(self, "Błąd", "Niepoprawne litery w sekwencji DNA.")
+                return
+
+            self.sequence_view.setPlainText(sequence)
+            self.log_output.append("Wprowadzono sekwencję ręcznie")
+            self.log_output.append(f"Długość sekwencji: {len(sequence)}")
+
+
+    def validate_sequence(self, sequence):
+        return all(base in "ATCG" for base in sequence)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
