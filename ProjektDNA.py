@@ -3,7 +3,7 @@
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QTextEdit, QFrame, QFileDialog, QMessageBox, QInputDialog, QTabWidget, QCheckBox
+    QPushButton, QLabel, QTextEdit, QFrame, QFileDialog, QMessageBox, QInputDialog, QTabWidget, QCheckBox, QDialog, QScrollArea, QStackedWidget
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -115,14 +115,31 @@ class DNAAnalyzerGUI(QMainWindow):
             btn.setFixedHeight(35)
             section_layout.addWidget(btn)
 
+            if name == "1) Podgląd sekwencji":
+                btn.clicked.connect(self.show_sequences)
+
+            if name == "2) Wybór motywów":
+                btn.clicked.connect(self.show_motifs)
+
         center_layout.addLayout(section_layout)
 
         # Okno z sekwencją DNA (placeholder)
         QTabWidget
-        self.sequence_tabs = QTabWidget()
-        center_layout.addWidget(self.sequence_tabs)
+        self.stacked_widget = QStackedWidget()
+        center_layout.addWidget(self.stacked_widget)
 
-        self.sequences = []  # lista słowników z danymi sekwencji
+        # -------- Widok 1: Sekwencje --------
+        self.sequence_tabs = QTabWidget()
+        self.stacked_widget.addWidget(self.sequence_tabs)
+
+        self.sequences = []
+
+        # -------- Widok 2: Motywy --------
+        self.motif_view = QWidget()
+        self.motif_layout = QVBoxLayout()
+        self.motif_view.setLayout(self.motif_layout)
+
+        self.stacked_widget.addWidget(self.motif_view)
 
         middle_layout.addWidget(center_panel)
 
@@ -297,6 +314,9 @@ class DNAAnalyzerGUI(QMainWindow):
     # Obsługa usuwania
         delete_button.clicked.connect(lambda: self.remove_sequence(tab))
 
+    def show_sequences(self):
+        self.stacked_widget.setCurrentWidget(self.sequence_tabs)
+
     def remove_sequence(self, tab):
         index = self.sequence_tabs.indexOf(tab)
         if index != -1:
@@ -338,10 +358,56 @@ class DNAAnalyzerGUI(QMainWindow):
             )
             return
 
-        self.motifs.append(motif)
+        self.motifs.append({
+            "sequence": motif,
+            "active": True
+    })
 
         self.log_output.append(f"Dodano motyw: {motif}")
         self.log_output.append(f"Liczba zapisanych motywów: {len(self.motifs)}")
+
+    def show_motifs(self):
+    # wyczyść poprzedni widok
+        for i in reversed(range(self.motif_layout.count())):
+            widget = self.motif_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+
+        if not self.motifs:
+            label = QLabel("Brak dodanych motywów.")
+            self.motif_layout.addWidget(label)
+        else:
+            for motif_data in self.motifs:
+                row = QHBoxLayout()
+
+                checkbox = QCheckBox(motif_data["sequence"])
+                checkbox.setChecked(motif_data["active"])
+
+                checkbox.stateChanged.connect(
+                    lambda state, m=motif_data: m.update({"active": state == 2})
+                )
+
+                delete_button = QPushButton("Usuń")
+                delete_button.setFixedWidth(80)
+
+                delete_button.clicked.connect(
+                    lambda _, m=motif_data: self.delete_motif_inline(m)
+                )
+
+                container = QWidget()
+                container.setLayout(row)
+
+                row.addWidget(checkbox)
+                row.addWidget(delete_button)
+
+                self.motif_layout.addWidget(container)
+
+        self.stacked_widget.setCurrentWidget(self.motif_view)
+
+    def delete_motif_inline(self, motif_data):
+        self.motifs.remove(motif_data)
+        self.log_output.append(f"Usunięto motyw: {motif_data['sequence']}")
+        self.show_motifs()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
