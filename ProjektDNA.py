@@ -7,6 +7,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
+from Bio import Entrez, SeqIO
+from io import StringIO
 
 
 class DNAAnalyzerGUI(QMainWindow):
@@ -14,7 +16,7 @@ class DNAAnalyzerGUI(QMainWindow):
         super().__init__()
         self.setWindowTitle("DNA Analyzer - PyQt6 GUI")
         self.setMinimumSize(1000, 700)
-
+        self.motifs = []
         # Główny widget centralny
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -63,7 +65,7 @@ class DNAAnalyzerGUI(QMainWindow):
             "Pobierz z NCBI",
             "Dodaj motyw",
             "Uruchom analizę",
-            "Eskportuj CSV/PDF"
+            "Eksportuj CSV/PDF"
         ]
 
         self.load_button = None
@@ -75,6 +77,12 @@ class DNAAnalyzerGUI(QMainWindow):
 
             if name == "Wczytaj plik":
                 self.load_button = btn
+
+            if name == "Pobierz z NCBI":
+                btn.clicked.connect(self.fetch_from_ncbi)
+
+            if name == "Dodaj motyw":
+                btn.clicked.connect(self.add_motif)
 
         if self.load_button is not None:
             self.load_button.clicked.connect(self.load_sequence)
@@ -209,6 +217,82 @@ class DNAAnalyzerGUI(QMainWindow):
 
     def validate_sequence(self, sequence):
         return all(base in "ATCG" for base in sequence)
+
+    def fetch_from_ncbi(self):
+        accession, ok = QInputDialog.getText(
+            self,
+            "Pobierz z NCBI",
+            "Podaj Accession ID (np. NM_001200.1):"
+        )
+
+        if not ok or not accession:
+            return
+
+        try:
+            Entrez.email = "72459-CKP@kozminski.edu.pl"  # Wpisz swój email!
+
+            handle = Entrez.efetch(
+                db="nucleotide",
+                id=accession,
+                rettype="fasta",
+                retmode="text"
+            )
+
+            fasta_data = handle.read()
+            handle.close()
+
+            record = SeqIO.read(StringIO(fasta_data), "fasta")
+            sequence = str(record.seq).upper()
+
+            if not sequence:
+                QMessageBox.warning(self, "Błąd", "Sekwencja jest pusta.")
+                return
+
+            if not self.validate_sequence(sequence):
+                QMessageBox.warning(self, "Błąd", "Sekwencja zawiera niedozwolone znaki.")
+                return
+
+            self.sequence_view.setPlainText(sequence)
+
+            self.log_output.append(f"Pobrano z NCBI: {accession}")
+            self.log_output.append(f"Opis: {record.description}")
+            self.log_output.append(f"Długość: {len(sequence)}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Błąd pobierania", str(e))
+
+    def add_motif(self):
+        motif, ok = QInputDialog.getText(
+            self,
+            "Dodaj motyw",
+            "Podaj motyw (tylko A, T, C, G):"
+        )
+
+        if not ok or not motif:
+            return
+
+        motif = motif.upper().strip()
+
+        if not self.validate_sequence(motif):
+            QMessageBox.warning(
+                self,
+                "Błąd",
+                "Motyw może zawierać tylko litery A, T, C, G."
+            )
+            return
+
+        if motif in self.motifs:
+            QMessageBox.information(
+                self,
+                "Informacja",
+                "Ten motyw już został dodany."
+            )
+            return
+
+        self.motifs.append(motif)
+
+        self.log_output.append(f"Dodano motyw: {motif}")
+        self.log_output.append(f"Liczba zapisanych motywów: {len(self.motifs)}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
