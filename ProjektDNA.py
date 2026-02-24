@@ -3,12 +3,13 @@
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QTextEdit, QFrame, QFileDialog, QMessageBox, QInputDialog, QTabWidget, QCheckBox, QDialog, QScrollArea, QStackedWidget
+    QPushButton, QLabel, QTextEdit, QFrame, QFileDialog, QMessageBox, QInputDialog, QTabWidget, QCheckBox, QScrollArea, QStackedWidget
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from Bio import Entrez, SeqIO
 from io import StringIO
+import webbrowser
 
 
 class DNAAnalyzerGUI(QMainWindow):
@@ -62,10 +63,12 @@ class DNAAnalyzerGUI(QMainWindow):
 
         side_buttons = [
             "Wczytaj plik",
+            "NCBI",
             "Pobierz z NCBI",
             "Dodaj motyw",
             "Uruchom analizę",
-            "Eksportuj CSV/PDF"
+            "Eksportuj CSV/PDF",
+            "Pomoc"
         ]
 
         self.load_button = None
@@ -80,6 +83,9 @@ class DNAAnalyzerGUI(QMainWindow):
 
             if name == "Pobierz z NCBI":
                 btn.clicked.connect(self.fetch_from_ncbi)
+
+            if name == "NCBI":
+                btn.clicked.connect(self.open_ncbi_browser)
 
             if name == "Dodaj motyw":
                 btn.clicked.connect(self.add_motif)
@@ -96,7 +102,7 @@ class DNAAnalyzerGUI(QMainWindow):
         center_layout = QVBoxLayout()
         center_panel.setLayout(center_layout)
 
-        center_title = QLabel("Analizowana sekwencja DNA")
+        center_title = QLabel("Menu analizatora DNA")
         center_title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         center_layout.addWidget(center_title)
 
@@ -107,7 +113,6 @@ class DNAAnalyzerGUI(QMainWindow):
             "2) Wybór motywów",
             "3) Wyniki analizy",
             "4) Wizualizacja",
-            "5) Eskport"
         ]
 
         for name in section_buttons:
@@ -124,7 +129,6 @@ class DNAAnalyzerGUI(QMainWindow):
         center_layout.addLayout(section_layout)
 
         # Okno z sekwencją DNA (placeholder)
-        QTabWidget
         self.stacked_widget = QStackedWidget()
         center_layout.addWidget(self.stacked_widget)
 
@@ -237,18 +241,43 @@ class DNAAnalyzerGUI(QMainWindow):
     def validate_sequence(self, sequence):
         return all(base in "ATCG" for base in sequence)
 
+    def open_ncbi_browser(self):
+        clipboard_text = QApplication.clipboard().text().strip()
+
+        query, ok = QInputDialog.getText(
+            self,
+            "Wyszukaj w NCBI Nucleotide",
+            "Podaj wyszukiwany termin (np. BRCA1 human):",
+            text=clipboard_text
+        )
+
+        if ok and query.strip():
+            query = query.strip().replace(" ", "+")
+            url = f"https://www.ncbi.nlm.nih.gov/nuccore/?term={query}"
+            webbrowser.open(url)
+            self.log_output.append(f"Otworzono NCBI Nucleotide dla zapytania: {query}")
+        else:
+            webbrowser.open("https://www.ncbi.nlm.nih.gov/nuccore/")
+            self.log_output.append("Otwarto stronę główną NCBI Nucleotide.")
+
     def fetch_from_ncbi(self):
+        clipboard = QApplication.clipboard()
+        clipboard_text = clipboard.text().strip()
+
         accession, ok = QInputDialog.getText(
             self,
             "Pobierz z NCBI",
-            "Podaj Accession ID (np. NM_001200.1):"
+            "Podaj Accession ID (np. NM_001200.1):",
+            text=clipboard_text
         )
 
-        if not ok or not accession:
+        if not ok or not accession.strip():
             return
 
+        accession = accession.strip()
+
         try:
-            Entrez.email = "72459-CKP@kozminski.edu.pl"  # Wpisz swój email!
+            Entrez.email = "72459-CKP@kozminski.edu.pl"
 
             handle = Entrez.efetch(
                 db="nucleotide",
@@ -285,25 +314,20 @@ class DNAAnalyzerGUI(QMainWindow):
         layout = QVBoxLayout()
         tab.setLayout(layout)
 
-    # Checkbox
         checkbox = QCheckBox("Aktywna sekwencja")
         checkbox.setChecked(True)
         layout.addWidget(checkbox)
 
-    # Okno tekstowe
         text_edit = QTextEdit()
         text_edit.setPlainText(sequence)
         layout.addWidget(text_edit)
 
-    # Przycisk usuwania
         delete_button = QPushButton("Usuń sekwencję")
         layout.addWidget(delete_button)
 
-    # Dodanie zakładki
         index = self.sequence_tabs.addTab(tab, title)
         self.sequence_tabs.setCurrentIndex(index)
 
-    # Zapis do listy
         self.sequences.append({
             "sequence": sequence,
             "checkbox": checkbox,
@@ -311,7 +335,6 @@ class DNAAnalyzerGUI(QMainWindow):
             "tab": tab
         })
 
-    # Obsługa usuwania
         delete_button.clicked.connect(lambda: self.remove_sequence(tab))
 
     def show_sequences(self):
@@ -322,7 +345,6 @@ class DNAAnalyzerGUI(QMainWindow):
         if index != -1:
             self.sequence_tabs.removeTab(index)
 
-        # usuń z listy
             self.sequences = [
                 seq for seq in self.sequences
                 if seq["tab"] != tab
@@ -367,7 +389,6 @@ class DNAAnalyzerGUI(QMainWindow):
         self.log_output.append(f"Liczba zapisanych motywów: {len(self.motifs)}")
 
     def show_motifs(self):
-    # wyczyść poprzedni widok
         for i in reversed(range(self.motif_layout.count())):
             widget = self.motif_layout.itemAt(i).widget()
             if widget:
