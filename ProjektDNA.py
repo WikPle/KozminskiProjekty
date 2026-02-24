@@ -3,7 +3,7 @@
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QTextEdit, QFrame, QFileDialog, QMessageBox, QInputDialog
+    QPushButton, QLabel, QTextEdit, QFrame, QFileDialog, QMessageBox, QInputDialog, QTabWidget, QCheckBox
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -118,9 +118,11 @@ class DNAAnalyzerGUI(QMainWindow):
         center_layout.addLayout(section_layout)
 
         # Okno z sekwencją DNA (placeholder)
-        self.sequence_view = QTextEdit()
-        self.sequence_view.setPlaceholderText("Tutaj będzie wyświetlana sekwencja DNA...")
-        center_layout.addWidget(self.sequence_view)
+        QTabWidget
+        self.sequence_tabs = QTabWidget()
+        center_layout.addWidget(self.sequence_tabs)
+
+        self.sequences = []  # lista słowników z danymi sekwencji
 
         middle_layout.addWidget(center_panel)
 
@@ -188,7 +190,7 @@ class DNAAnalyzerGUI(QMainWindow):
                 QMessageBox.warning(self, "Błąd", "Niepoprawne znaki DNA.")
                 return
 
-            self.sequence_view.setPlainText(sequence)
+            self.add_sequence_tab(sequence, title="FASTA")
             self.log_output.append(f"Wczytano plik: {file_path}")
             self.log_output.append(f"Długość sekwencji: {len(sequence)}")
 
@@ -210,7 +212,7 @@ class DNAAnalyzerGUI(QMainWindow):
                 QMessageBox.warning(self, "Błąd", "Niepoprawne litery w sekwencji DNA.")
                 return
 
-            self.sequence_view.setPlainText(sequence)
+            self.add_sequence_tab(sequence, title="Manual")
             self.log_output.append("Wprowadzono sekwencję ręcznie")
             self.log_output.append(f"Długość sekwencji: {len(sequence)}")
 
@@ -252,7 +254,7 @@ class DNAAnalyzerGUI(QMainWindow):
                 QMessageBox.warning(self, "Błąd", "Sekwencja zawiera niedozwolone znaki.")
                 return
 
-            self.sequence_view.setPlainText(sequence)
+            self.add_sequence_tab(sequence, title=accession)
 
             self.log_output.append(f"Pobrano z NCBI: {accession}")
             self.log_output.append(f"Opis: {record.description}")
@@ -260,6 +262,53 @@ class DNAAnalyzerGUI(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Błąd pobierania", str(e))
+
+    def add_sequence_tab(self, sequence, title="Sekwencja"):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        tab.setLayout(layout)
+
+    # Checkbox
+        checkbox = QCheckBox("Aktywna sekwencja")
+        checkbox.setChecked(True)
+        layout.addWidget(checkbox)
+
+    # Okno tekstowe
+        text_edit = QTextEdit()
+        text_edit.setPlainText(sequence)
+        layout.addWidget(text_edit)
+
+    # Przycisk usuwania
+        delete_button = QPushButton("Usuń sekwencję")
+        layout.addWidget(delete_button)
+
+    # Dodanie zakładki
+        index = self.sequence_tabs.addTab(tab, title)
+        self.sequence_tabs.setCurrentIndex(index)
+
+    # Zapis do listy
+        self.sequences.append({
+            "sequence": sequence,
+            "checkbox": checkbox,
+            "text_edit": text_edit,
+            "tab": tab
+        })
+
+    # Obsługa usuwania
+        delete_button.clicked.connect(lambda: self.remove_sequence(tab))
+
+    def remove_sequence(self, tab):
+        index = self.sequence_tabs.indexOf(tab)
+        if index != -1:
+            self.sequence_tabs.removeTab(index)
+
+        # usuń z listy
+            self.sequences = [
+                seq for seq in self.sequences
+                if seq["tab"] != tab
+            ]
+
+            self.log_output.append("Usunięto sekwencję.")
 
     def add_motif(self):
         motif, ok = QInputDialog.getText(
