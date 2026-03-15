@@ -3,14 +3,16 @@
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QTextEdit, QFrame, QFileDialog, QMessageBox, QInputDialog, QTabWidget, QCheckBox, QScrollArea, QStackedWidget
+    QPushButton, QLabel, QTextEdit, QFrame, QFileDialog, QMessageBox, QInputDialog, QTabWidget, QCheckBox, QScrollArea, QStackedWidget, QTableWidget, QTableWidgetItem
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor
 from Bio import Entrez, SeqIO
 from io import StringIO
 import webbrowser
-
+import numpy as np
+import pandas as pd
+import random
 
 class DNAAnalyzerGUI(QMainWindow):
     def __init__(self):
@@ -18,6 +20,19 @@ class DNAAnalyzerGUI(QMainWindow):
         self.setWindowTitle("DNA Analyzer - PyQt6 GUI")
         self.setMinimumSize(1000, 700)
         self.motifs = []
+        self.manual_sequence_counter = 1
+        self.motif_colors = [
+            QColor("#FFD700"),  # złoty
+            QColor("#00CED1"),  # ciemny turkus
+            QColor("#32CD32"),  # limonkowa zieleń
+            QColor("#FF4500"),  # pomarańczowoczerwony
+            QColor("#FF69B4"),  # różowy
+            QColor("#1E90FF"),  # niebieski
+            QColor("#8A2BE2"),  # fioletowy
+            QColor("#00FA9A"),  # medium spring green
+            QColor("#FF8C00"),  # dark orange
+            QColor("#DA70D6")   # orchidea
+]
         # Główny widget centralny
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -89,6 +104,8 @@ class DNAAnalyzerGUI(QMainWindow):
 
             if name == "Dodaj motyw":
                 btn.clicked.connect(self.add_motif)
+            if name == "Uruchom analizę":
+                btn.clicked.connect(self.run_analysis)
 
         if self.load_button is not None:
             self.load_button.clicked.connect(self.load_sequence)
@@ -126,11 +143,17 @@ class DNAAnalyzerGUI(QMainWindow):
             if name == "2) Wybór motywów":
                 btn.clicked.connect(self.show_motifs)
 
+            if name == "3) Wyniki analizy":
+                btn.clicked.connect(self.show_results)
+
         center_layout.addLayout(section_layout)
 
         # Okno z sekwencją DNA (placeholder)
         self.stacked_widget = QStackedWidget()
         center_layout.addWidget(self.stacked_widget)
+        self.results_view = QWidget()
+        self.results_layout = QVBoxLayout()
+        self.results_view.setLayout(self.results_layout)
 
         # -------- Widok 1: Sekwencje --------
         self.sequence_tabs = QTabWidget()
@@ -148,6 +171,23 @@ class DNAAnalyzerGUI(QMainWindow):
         middle_layout.addWidget(center_panel)
 
         main_layout.addLayout(middle_layout)
+
+       # -------- Widok 3: Wyniki analizy --------
+        self.analysis_view = QWidget()
+        self.analysis_layout = QVBoxLayout()
+        self.analysis_view.setLayout(self.analysis_layout)
+
+        # Tabele wyników
+        self.results_table = QTableWidget()
+        self.segment_table = QTableWidget()
+
+        self.analysis_layout.addWidget(QLabel("Wyniki analizy motywów:"))
+        self.analysis_layout.addWidget(self.results_table)
+        self.analysis_layout.addWidget(QLabel("Segmentacja sekwencji:"))
+        self.analysis_layout.addWidget(self.segment_table)
+
+        # dodanie zakładki do stacked_widget
+        self.stacked_widget.addWidget(self.analysis_view)
 
         # =========================
         # 3. DOLNY PANEL LOGÓW
@@ -227,13 +267,18 @@ class DNAAnalyzerGUI(QMainWindow):
         )
 
         if ok and text:
+
             sequence = text.replace("\n", "").replace(" ", "").upper()
 
             if not self.validate_sequence(sequence):
                 QMessageBox.warning(self, "Błąd", "Niepoprawne litery w sekwencji DNA.")
                 return
 
-            self.add_sequence_tab(sequence, title="Manual")
+            title = f"Sekwencja_{self.manual_sequence_counter}"
+            self.manual_sequence_counter += 1
+
+            self.add_sequence_tab(sequence, title=title)
+
             self.log_output.append("Wprowadzono sekwencję ręcznie")
             self.log_output.append(f"Długość sekwencji: {len(sequence)}")
 
@@ -319,6 +364,7 @@ class DNAAnalyzerGUI(QMainWindow):
         layout.addWidget(checkbox)
 
         text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
         text_edit.setPlainText(sequence)
         layout.addWidget(text_edit)
 
@@ -329,6 +375,7 @@ class DNAAnalyzerGUI(QMainWindow):
         self.sequence_tabs.setCurrentIndex(index)
 
         self.sequences.append({
+            "name": title,
             "sequence": sequence,
             "checkbox": checkbox,
             "text_edit": text_edit,
@@ -425,10 +472,211 @@ class DNAAnalyzerGUI(QMainWindow):
 
         self.stacked_widget.setCurrentWidget(self.motif_view)
 
+    def highlight_motifs(self, text_edit, sequence, motif_color_map):
+
+        cursor = text_edit.textCursor()
+
+        # reset formatowania
+        cursor.select(QTextCursor.SelectionType.Document)
+        cursor.setCharFormat(QTextCharFormat())
+
+        for motif, color in motif_color_map.items():
+
+            fmt = QTextCharFormat()
+            fmt.setBackground(color)
+            fmt.setForeground(QColor("black"))
+            fmt.setFontWeight(QFont.Weight.Bold)
+
+            start = 0
+            motif_len = len(motif)
+
+            while True:
+                pos = sequence.find(motif, start)
+                if pos == -1:
+                    break
+
+                cursor.setPosition(pos)
+                cursor.movePosition(
+                    QTextCursor.MoveOperation.Right,
+                    QTextCursor.MoveMode.KeepAnchor,
+                    motif_len
+                )
+                cursor.setCharFormat(fmt)
+
+                # non-overlapping
+                start = pos + motif_len
+
     def delete_motif_inline(self, motif_data):
         self.motifs.remove(motif_data)
         self.log_output.append(f"Usunięto motyw: {motif_data['sequence']}")
         self.show_motifs()
+
+    def run_analysis(self):
+
+        if not self.sequences:
+            self.log_output.append("Brak sekwencji.")
+            return
+
+        active_motifs = [m["sequence"] for m in self.motifs if m["active"]]
+
+        motif_color_map = {}
+        for i, motif in enumerate(active_motifs):
+            motif_color_map[motif] = self.motif_colors[i % len(self.motif_colors)]
+
+        if not active_motifs:
+            self.log_output.append("Brak aktywnych motywów.")
+            return
+
+        motif_color_map = {}
+        for i, motif in enumerate(active_motifs):
+            motif_color_map[motif] = self.motif_colors[i % len(self.motif_colors)]
+
+        motif_results = []
+        segment_results = []
+
+        for seq_data in self.sequences:
+
+            if not seq_data["checkbox"].isChecked():
+                continue
+
+            sequence = seq_data["text_edit"].toPlainText()
+
+            self.highlight_motifs(
+                seq_data["text_edit"],
+                sequence,
+                motif_color_map
+            )
+            sequence_name = seq_data["name"]
+
+            motif_counts = self.find_motifs(sequence, active_motifs)
+
+            for motif, count in motif_counts.items():
+
+                motif_results.append({
+                    "Sekwencja": sequence_name,
+                    "Motyw": motif,
+                    "Liczba": count,
+                    "Długość sekwencji": len(sequence)
+                })
+
+            seg_df = self.segment_sequence(sequence)
+            seg_df["Sekwencja"] = sequence_name
+            seg_df = seg_df[["Sekwencja", "Początek", "Koniec", "Długość", "Zawartość GC"]]
+
+            segment_results.append(seg_df)
+
+        motif_df = pd.DataFrame(motif_results)
+
+        if segment_results:
+            segment_df = pd.concat(segment_results, ignore_index=True)
+        else:
+            segment_df = pd.DataFrame()
+
+        self.populate_table(self.results_table, motif_df)
+
+        if not segment_df.empty:
+            self.populate_table(self.segment_table, segment_df)
+
+        self.show_results()
+
+        self.log_output.append("Analiza zakończona.")
+
+    def find_motifs(self, sequence, motifs):
+
+        results = {}
+
+        for motif in motifs:
+
+            count = 0
+            start = 0
+            motif_len = len(motif)
+
+            while True:
+
+                pos = sequence.find(motif, start)
+
+                if pos == -1:
+                    break
+
+                count += 1
+
+                start = pos + motif_len
+
+            results[motif] = count
+
+        return results
+
+    def segment_sequence(self, sequence, window_size=100):
+
+        seq_array = np.array(list(sequence))
+
+        segments = []
+
+        for i in range(0, len(seq_array), window_size):
+
+            segment = seq_array[i:i+window_size]
+
+            segment_str = "".join(segment)
+
+            gc = (segment_str.count("G") + segment_str.count("C")) / len(segment_str)
+
+            segments.append({
+                "Początek": i,
+                "Koniec": i + len(segment),
+                "Długość": len(segment),
+                "Zawartość GC": round(gc, 3)
+            })
+
+        df = pd.DataFrame(segments)
+
+        return df
+
+    def populate_table(self, table, df):
+
+        table.clear()
+
+        table.setRowCount(len(df))
+        table.setColumnCount(len(df.columns))
+
+        table.setHorizontalHeaderLabels(df.columns)
+
+        for row in range(len(df)):
+            for col in range(len(df.columns)):
+
+                value = str(df.iloc[row, col])
+
+                table.setItem(
+                    row,
+                    col,
+                    QTableWidgetItem(value)
+                )
+        table.resizeColumnsToContents()
+
+    def show_results(self):
+        self.stacked_widget.setCurrentWidget(self.analysis_view)
+
+    def display_results(self, df):
+
+        self.results_table.clear()
+
+        self.results_table.setRowCount(len(df))
+        self.results_table.setColumnCount(len(df.columns))
+
+        self.results_table.setHorizontalHeaderLabels(df.columns)
+
+        for row in range(len(df)):
+
+            for col in range(len(df.columns)):
+
+                value = str(df.iloc[row, col])
+
+                self.results_table.setItem(
+                    row,
+                    col,
+                    QTableWidgetItem(value)
+                )
+
+        self.show_results()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
