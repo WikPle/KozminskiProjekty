@@ -12,7 +12,9 @@ from io import StringIO
 import webbrowser
 import numpy as np
 import pandas as pd
-import random
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
 class DNAAnalyzerGUI(QMainWindow):
     def __init__(self):
@@ -146,6 +148,9 @@ class DNAAnalyzerGUI(QMainWindow):
             if name == "3) Wyniki analizy":
                 btn.clicked.connect(self.show_results)
 
+            if name == "4) Wizualizacja":
+                btn.clicked.connect(self.show_visualization)
+
         center_layout.addLayout(section_layout)
 
         # Okno z sekwencją DNA (placeholder)
@@ -177,17 +182,73 @@ class DNAAnalyzerGUI(QMainWindow):
         self.analysis_layout = QVBoxLayout()
         self.analysis_view.setLayout(self.analysis_layout)
 
-        # Tabele wyników
+        # zakładki wyników
+        self.analysis_tabs = QTabWidget()
+
+        # --- TAB 1 MOTIFS ---
+        self.motif_results_tab = QWidget()
+        motif_layout = QVBoxLayout()
+        self.motif_results_tab.setLayout(motif_layout)
+
         self.results_table = QTableWidget()
+        motif_layout.addWidget(self.results_table)
+
+        # --- TAB 2 SEGMENTS ---
+        self.segment_results_tab = QWidget()
+        segment_layout = QVBoxLayout()
+        self.segment_results_tab.setLayout(segment_layout)
+
         self.segment_table = QTableWidget()
+        segment_layout.addWidget(self.segment_table)
 
-        self.analysis_layout.addWidget(QLabel("Wyniki analizy motywów:"))
-        self.analysis_layout.addWidget(self.results_table)
-        self.analysis_layout.addWidget(QLabel("Segmentacja sekwencji:"))
-        self.analysis_layout.addWidget(self.segment_table)
+        # dodanie zakładek
+        self.analysis_tabs.addTab(self.motif_results_tab, "Motywy")
+        self.analysis_tabs.addTab(self.segment_results_tab, "Segmentacja GC")
 
-        # dodanie zakładki do stacked_widget
+        self.analysis_layout.addWidget(self.analysis_tabs)
+
         self.stacked_widget.addWidget(self.analysis_view)
+
+        # -------- Widok 4: Wizualizacja --------
+        self.visualization_view = QWidget()
+        self.visual_layout = QVBoxLayout()
+        self.visualization_view.setLayout(self.visual_layout)
+
+        # zakładki wizualizacji
+        self.visual_tabs = QTabWidget()
+
+        # --- TAB 1 BAR CHART ---
+        self.bar_tab = QWidget()
+        bar_layout = QVBoxLayout()
+        self.bar_tab.setLayout(bar_layout)
+
+        self.bar_canvas = FigureCanvas(plt.figure())
+        bar_layout.addWidget(self.bar_canvas)
+
+        # --- TAB 2 HEATMAP ---
+        self.heatmap_tab = QWidget()
+        heatmap_layout = QVBoxLayout()
+        self.heatmap_tab.setLayout(heatmap_layout)
+
+        self.heatmap_canvas = FigureCanvas(plt.figure())
+        heatmap_layout.addWidget(self.heatmap_canvas)
+
+        # --- TAB 3 MOTIF POSITIONS ---
+        self.position_tab = QWidget()
+        position_layout = QVBoxLayout()
+        self.position_tab.setLayout(position_layout)
+
+        self.position_canvas = FigureCanvas(plt.figure())
+        position_layout.addWidget(self.position_canvas)
+
+        # dodanie zakładek
+        self.visual_tabs.addTab(self.bar_tab, "Wykres motywów")
+        self.visual_tabs.addTab(self.heatmap_tab, "Heatmapa")
+        self.visual_tabs.addTab(self.position_tab, "Pozycje motywów")
+
+        self.visual_layout.addWidget(self.visual_tabs)
+
+        self.stacked_widget.addWidget(self.visualization_view)
 
         # =========================
         # 3. DOLNY PANEL LOGÓW
@@ -519,10 +580,6 @@ class DNAAnalyzerGUI(QMainWindow):
 
         active_motifs = [m["sequence"] for m in self.motifs if m["active"]]
 
-        motif_color_map = {}
-        for i, motif in enumerate(active_motifs):
-            motif_color_map[motif] = self.motif_colors[i % len(self.motif_colors)]
-
         if not active_motifs:
             self.log_output.append("Brak aktywnych motywów.")
             return
@@ -565,12 +622,15 @@ class DNAAnalyzerGUI(QMainWindow):
 
             segment_results.append(seg_df)
 
-        motif_df = pd.DataFrame(motif_results)
+        self.motif_df = pd.DataFrame(motif_results)
+        motif_df = self.motif_df
 
         if segment_results:
             segment_df = pd.concat(segment_results, ignore_index=True)
         else:
             segment_df = pd.DataFrame()
+
+        self.segment_df = segment_df
 
         self.populate_table(self.results_table, motif_df)
 
@@ -677,6 +737,145 @@ class DNAAnalyzerGUI(QMainWindow):
                 )
 
         self.show_results()
+
+    def show_visualization(self):
+
+        if not hasattr(self, "motif_df"):
+            self.log_output.append("Najpierw uruchom analizę.")
+            return
+
+        self.plot_bar_chart()
+        self.plot_heatmap_visualization()
+        self.plot_motif_positions_visualization()
+
+        self.stacked_widget.setCurrentWidget(self.visualization_view)
+
+    def plot_bar_chart(self):
+
+        fig = self.bar_canvas.figure
+        fig.clear()
+
+        ax = fig.add_subplot(111)
+
+        pivot = self.motif_df.pivot_table(
+            index="Sekwencja",
+            columns="Motyw",
+            values="Liczba",
+            fill_value=0
+        )
+
+        pivot.plot(kind="bar", ax=ax)
+
+        ax.set_title("Liczba motywów w sekwencjach")
+        ax.set_ylabel("Liczba wystąpień")
+        ax.set_xlabel("Sekwencja")
+
+        fig.tight_layout()
+        self.bar_canvas.draw()
+
+    def plot_heatmap_visualization(self):
+
+        active_sequences = [seq for seq in self.sequences if seq["checkbox"].isChecked()]
+        motifs = [m["sequence"] for m in self.motifs if m["active"]]
+
+        if not active_sequences or not motifs:
+            return
+
+        fig = self.heatmap_canvas.figure
+        fig.clear()
+
+        n = len(active_sequences)
+        fig.set_size_inches(10, max(4, 3 * n))
+
+        for idx, seq_data in enumerate(active_sequences):
+            sequence = seq_data["sequence"]
+            name = seq_data["name"]
+
+            window = 100
+            matrix = []
+            for motif in motifs:
+                row = []
+                for i in range(0, len(sequence), window):
+                    segment = sequence[i:i+window]
+                    row.append(segment.count(motif))
+                matrix.append(row)
+            matrix = np.array(matrix)
+
+            ax = fig.add_subplot(n, 1, idx+1)
+            im = ax.imshow(matrix, cmap="viridis", aspect="auto")
+
+            ax.set_title(f"Heatmapa motywów – {name}", fontsize=10)
+            ax.set_xlabel("Segment")
+            ax.set_ylabel("Motyw")
+
+            ax.set_yticks(range(len(motifs)))
+            ax.set_yticklabels(motifs, fontsize=9)
+            ax.set_xticks(range(matrix.shape[1]))
+            ax.set_xticklabels(range(1, matrix.shape[1]+1), fontsize=9)
+
+        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+        fig.colorbar(im, cax=cbar_ax)
+        cbar_ax.set_title("Liczba", fontsize=9)
+
+        fig.subplots_adjust(left=0.1, right=0.9, top=0.95, bottom=0.1, hspace=0.5)
+
+        self.heatmap_canvas.draw()
+
+    def plot_motif_positions_visualization(self):
+
+        active_sequences = [
+            seq for seq in self.sequences if seq["checkbox"].isChecked()
+        ]
+
+        motifs = [m["sequence"] for m in self.motifs if m["active"]]
+
+        if not active_sequences or not motifs:
+            return
+
+        fig = self.position_canvas.figure
+        fig.clear()
+
+        n = len(active_sequences)
+
+        fig.set_size_inches(10, max(4, 3 * n))
+
+        for idx, seq_data in enumerate(active_sequences):
+
+            sequence = seq_data["sequence"]
+            name = seq_data["name"]
+
+            ax = fig.add_subplot(n, 1, idx+1)
+
+            y = 0
+
+            for motif in motifs:
+
+                positions = []
+                start = 0
+
+                while True:
+
+                    pos = sequence.find(motif, start)
+
+                    if pos == -1:
+                        break
+
+                    positions.append(pos)
+                    start = pos + 1
+
+                ax.scatter(positions, [y]*len(positions), label=motif)
+
+                y += 1
+
+            ax.set_title(f"Pozycje motywów – {name}")
+            ax.set_xlabel("Pozycja w sekwencji")
+            ax.set_yticks(range(len(motifs)))
+            ax.set_yticklabels(motifs)
+
+            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+
+        fig.subplots_adjust(left=0.07, right=0.8, top=0.95, bottom=0.05, hspace=0.5)
+        self.position_canvas.draw()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
