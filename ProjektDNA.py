@@ -192,20 +192,34 @@ class DNAAnalyzerGUI(QMainWindow):
 
         self.results_table = QTableWidget()
         motif_layout.addWidget(self.results_table)
+        self.analysis_tabs.addTab(self.motif_results_tab, "Motywy")
 
-        # --- TAB 2 SEGMENTS ---
+        # --- TAB 2 SUMMARY ---
+        self.summary_tab = QWidget()
+        self.summary_layout = QVBoxLayout()
+        self.summary_tab.setLayout(self.summary_layout)
+
+        self.summary_table = QTableWidget()
+        self.summary_layout.addWidget(self.summary_table)
+
+        self.analysis_tabs.addTab(self.summary_tab, "Podsumowanie motywów")
+
+        # --- TAB 3 SEGMENTS ---
         self.segment_results_tab = QWidget()
         segment_layout = QVBoxLayout()
         self.segment_results_tab.setLayout(segment_layout)
 
         self.segment_table = QTableWidget()
         segment_layout.addWidget(self.segment_table)
-
-        # dodanie zakładek
-        self.analysis_tabs.addTab(self.motif_results_tab, "Motywy")
         self.analysis_tabs.addTab(self.segment_results_tab, "Segmentacja GC")
 
+
         self.analysis_layout.addWidget(self.analysis_tabs)
+
+        self.summary_label = QLabel("")
+        self.summary_label.setWordWrap(True)
+        self.summary_label.setStyleSheet("padding: 10px;")
+        self.analysis_layout.addWidget(self.summary_label)
 
         self.stacked_widget.addWidget(self.analysis_view)
 
@@ -596,7 +610,7 @@ class DNAAnalyzerGUI(QMainWindow):
             if not seq_data["checkbox"].isChecked():
                 continue
 
-            sequence = seq_data["text_edit"].toPlainText()
+            sequence = seq_data["sequence"]
 
             self.highlight_motifs(
                 seq_data["text_edit"],
@@ -625,6 +639,15 @@ class DNAAnalyzerGUI(QMainWindow):
         self.motif_df = pd.DataFrame(motif_results)
         motif_df = self.motif_df
 
+        pivot = self.motif_df.pivot_table(
+            index="Motyw",
+            columns="Sekwencja",
+            values="Liczba",
+            fill_value=0
+        )
+
+        self.pivot_df = pivot.reset_index()
+
         if segment_results:
             segment_df = pd.concat(segment_results, ignore_index=True)
         else:
@@ -632,7 +655,10 @@ class DNAAnalyzerGUI(QMainWindow):
 
         self.segment_df = segment_df
 
-        self.populate_table(self.results_table, motif_df)
+        self.populate_table(self.results_table, self.pivot_df)
+
+        summary_df = self.analyze_motifs_summary(self.pivot_df)
+        self.populate_table(self.summary_table, summary_df)
 
         if not segment_df.empty:
             self.populate_table(self.segment_table, segment_df)
@@ -690,6 +716,38 @@ class DNAAnalyzerGUI(QMainWindow):
         df = pd.DataFrame(segments)
 
         return df
+
+    def analyze_motifs_summary(self, pivot_df):
+
+        df = pivot_df.set_index("Motyw")
+
+        results = []
+
+        # 🔹 wspólne
+        common = df[(df > 0).all(axis=1)].index.tolist()
+
+        results.append({
+            "Typ": "Wspólne",
+            "Sekwencja": "Wszystkie",
+            "Liczba": len(common),
+            "Motywy": ", ".join(common) if common else "Brak"
+        })
+
+        # 🔹 unikalne
+        for col in df.columns:
+            unique = df[
+                (df[col] > 0) &
+                (df.drop(columns=[col]) == 0).all(axis=1)
+            ].index.tolist()
+
+            results.append({
+                "Typ": "Unikalne",
+                "Sekwencja": col,
+                "Liczba": len(unique),
+                "Motywy": ", ".join(unique) if unique else "Brak"
+            })
+
+        return pd.DataFrame(results)
 
     def populate_table(self, table, df):
 
