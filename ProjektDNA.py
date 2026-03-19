@@ -13,7 +13,6 @@ import webbrowser
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
 class DNAAnalyzerGUI(QMainWindow):
@@ -22,6 +21,8 @@ class DNAAnalyzerGUI(QMainWindow):
         self.setWindowTitle("DNA Analyzer - PyQt6 GUI")
         self.setMinimumSize(1000, 700)
         self.motifs = []
+        self.wykresy = Wykresy(self)
+        self.report_exporter = RaportExporter(self)
         self.manual_sequence_counter = 1
         self.motif_colors = [
             QColor("#FFD700"),  # złoty
@@ -106,8 +107,12 @@ class DNAAnalyzerGUI(QMainWindow):
 
             if name == "Dodaj motyw":
                 btn.clicked.connect(self.add_motif)
+
             if name == "Uruchom analizę":
                 btn.clicked.connect(self.run_analysis)
+
+            if name == "Eksportuj CSV/PDF":
+                btn.clicked.connect(self.show_export_options)
 
         if self.load_button is not None:
             self.load_button.clicked.connect(self.load_sequence)
@@ -797,25 +802,43 @@ class DNAAnalyzerGUI(QMainWindow):
         self.show_results()
 
     def show_visualization(self):
-
         if not hasattr(self, "motif_df"):
             self.log_output.append("Najpierw uruchom analizę.")
             return
 
-        self.plot_bar_chart()
-        self.plot_heatmap_visualization()
-        self.plot_motif_positions_visualization()
+        self.wykresy.plot_bar_chart()
+        self.wykresy.plot_heatmap_visualization()
+        self.wykresy.plot_motif_positions_visualization()
 
         self.stacked_widget.setCurrentWidget(self.visualization_view)
 
+    def show_export_options(self):
+        options = QMessageBox(self)
+        options.setWindowTitle("Eksport danych")
+        options.setText("Wybierz opcję eksportu:")
+
+        csv_button = options.addButton("Eksportuj CSV", QMessageBox.ButtonRole.ActionRole)
+        pdf_button = options.addButton("Eksportuj PDF", QMessageBox.ButtonRole.ActionRole)
+        options.addButton("Anuluj", QMessageBox.ButtonRole.RejectRole)
+
+        options.exec()
+        clicked = options.clickedButton()
+
+        if clicked == csv_button:
+            self.report_exporter.export_csv()
+        elif clicked == pdf_button:
+            self.report_exporter.export_pdf()
+
+class Wykresy:
+    def __init__(self, analyzer_gui):
+        self.gui = analyzer_gui  # referencja do głównej klasy GUI
+
     def plot_bar_chart(self):
-
-        fig = self.bar_canvas.figure
+        fig = self.gui.bar_canvas.figure
         fig.clear()
-
         ax = fig.add_subplot(111)
 
-        pivot = self.motif_df.pivot_table(
+        pivot = self.gui.motif_df.pivot_table(
             index="Sekwencja",
             columns="Motyw",
             values="Liczba",
@@ -823,34 +846,31 @@ class DNAAnalyzerGUI(QMainWindow):
         )
 
         pivot.plot(kind="bar", ax=ax)
-
         ax.set_title("Liczba motywów w sekwencjach")
         ax.set_ylabel("Liczba wystąpień")
         ax.set_xlabel("Sekwencja")
 
         fig.tight_layout()
-        self.bar_canvas.draw()
+        self.gui.bar_canvas.draw()
 
     def plot_heatmap_visualization(self):
-
-        active_sequences = [seq for seq in self.sequences if seq["checkbox"].isChecked()]
-        motifs = [m["sequence"] for m in self.motifs if m["active"]]
+        active_sequences = [seq for seq in self.gui.sequences if seq["checkbox"].isChecked()]
+        motifs = [m["sequence"] for m in self.gui.motifs if m["active"]]
 
         if not active_sequences or not motifs:
             return
 
-        fig = self.heatmap_canvas.figure
+        fig = self.gui.heatmap_canvas.figure
         fig.clear()
-
         n = len(active_sequences)
         fig.set_size_inches(10, max(4, 3 * n))
 
         for idx, seq_data in enumerate(active_sequences):
             sequence = seq_data["sequence"]
             name = seq_data["name"]
-
             window = 100
             matrix = []
+
             for motif in motifs:
                 row = []
                 for i in range(0, len(sequence), window):
@@ -865,7 +885,6 @@ class DNAAnalyzerGUI(QMainWindow):
             ax.set_title(f"Heatmapa motywów – {name}", fontsize=10)
             ax.set_xlabel("Segment")
             ax.set_ylabel("Motyw")
-
             ax.set_yticks(range(len(motifs)))
             ax.set_yticklabels(motifs, fontsize=9)
             ax.set_xticks(range(matrix.shape[1]))
@@ -874,66 +893,199 @@ class DNAAnalyzerGUI(QMainWindow):
         cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
         fig.colorbar(im, cax=cbar_ax)
         cbar_ax.set_title("Liczba", fontsize=9)
-
         fig.subplots_adjust(left=0.1, right=0.9, top=0.95, bottom=0.1, hspace=0.5)
-
-        self.heatmap_canvas.draw()
+        self.gui.heatmap_canvas.draw()
 
     def plot_motif_positions_visualization(self):
-
-        active_sequences = [
-            seq for seq in self.sequences if seq["checkbox"].isChecked()
-        ]
-
-        motifs = [m["sequence"] for m in self.motifs if m["active"]]
+        active_sequences = [seq for seq in self.gui.sequences if seq["checkbox"].isChecked()]
+        motifs = [m["sequence"] for m in self.gui.motifs if m["active"]]
 
         if not active_sequences or not motifs:
             return
 
-        fig = self.position_canvas.figure
+        fig = self.gui.position_canvas.figure
         fig.clear()
-
         n = len(active_sequences)
-
         fig.set_size_inches(10, max(4, 3 * n))
 
         for idx, seq_data in enumerate(active_sequences):
-
             sequence = seq_data["sequence"]
             name = seq_data["name"]
-
             ax = fig.add_subplot(n, 1, idx+1)
 
             y = 0
-
             for motif in motifs:
-
                 positions = []
                 start = 0
-
                 while True:
-
                     pos = sequence.find(motif, start)
-
                     if pos == -1:
                         break
-
                     positions.append(pos)
                     start = pos + 1
 
                 ax.scatter(positions, [y]*len(positions), label=motif)
-
                 y += 1
 
             ax.set_title(f"Pozycje motywów – {name}")
             ax.set_xlabel("Pozycja w sekwencji")
             ax.set_yticks(range(len(motifs)))
             ax.set_yticklabels(motifs)
-
             ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 
         fig.subplots_adjust(left=0.07, right=0.8, top=0.95, bottom=0.05, hspace=0.5)
-        self.position_canvas.draw()
+        self.gui.position_canvas.draw()
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from PyQt6.QtWidgets import QFileDialog, QMessageBox
+
+class RaportExporter:
+    def __init__(self, gui):
+        self.gui = gui
+
+    def export_csv(self):
+        if not hasattr(self.gui, "motif_df") or self.gui.motif_df.empty:
+            QMessageBox.warning(self.gui, "Błąd", "Brak danych do eksportu.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self.gui,
+            "Zapisz dane do CSV",
+            "",
+            "CSV Files (*.csv)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            # 🔹 Zapis podsumowania statystyk
+            summary_df = self.summarize_statistics()
+            summary_df.to_csv(file_path, index=False)
+
+            # 🔹 Zapis pivot_df (liczba motywów na sekwencję)
+            pivot_file = file_path.replace(".csv", "_motywy.csv")
+            self.gui.pivot_df.to_csv(pivot_file, index=False)
+
+            # 🔹 Zapis segment_df (segmentacja i GC)
+            if hasattr(self.gui, "segment_df") and not self.gui.segment_df.empty:
+                segment_file = file_path.replace(".csv", "_segmenty.csv")
+                self.gui.segment_df.to_csv(segment_file, index=False)
+
+            QMessageBox.information(
+                self.gui,
+                "Eksport CSV",
+                f"Dane zapisano do:\n{file_path}\n{pivot_file}\n{segment_file if hasattr(self.gui, 'segment_df') else ''}"
+            )
+            self.gui.log_output.append(f"Wyeksportowano dane CSV: {file_path}, pivot: {pivot_file}")
+
+        except Exception as e:
+            QMessageBox.critical(self.gui, "Błąd", f"Nie udało się zapisać CSV:\n{str(e)}")
+
+    def export_pdf(self):
+        if not hasattr(self.gui, "motif_df") or self.gui.motif_df.empty:
+            QMessageBox.warning(self.gui, "Błąd", "Brak danych do raportu.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self.gui,
+            "Zapisz raport do PDF",
+            "",
+            "PDF Files (*.pdf)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            with PdfPages(file_path) as pdf:
+
+                # 🔹 1. Podsumowanie statystyk
+                fig, ax = plt.subplots(figsize=(8, 6))
+                ax.axis('off')
+                summary_df = self.summarize_statistics()
+                table = ax.table(
+                    cellText=summary_df.values,
+                    colLabels=summary_df.columns,
+                    cellLoc='center',      # wyśrodkowanie tekstu w komórkach
+                    colLoc='center',       # wyśrodkowanie nagłówków
+                    loc='center'
+                )
+                table.auto_set_font_size(False)
+                table.set_fontsize(8)      # zmniejszenie czcionki nagłówków
+                table.scale(1, 1.2)        # skala X,Y dla tabeli (np. wyższa wysokość wierszy)
+                table.auto_set_font_size(False)
+                table.set_fontsize(10)
+                ax.set_title("Podsumowanie statystyk")
+                pdf.savefig(fig)
+                plt.close(fig)
+
+                # 🔹 2. Pivot motywów
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.axis('off')
+                table = ax.table(cellText=self.gui.pivot_df.values,
+                                colLabels=self.gui.pivot_df.columns,
+                                loc='center')
+                table.auto_set_font_size(False)
+                table.set_fontsize(8)
+                ax.set_title("Liczba motywów w sekwencjach")
+                pdf.savefig(fig)
+                plt.close(fig)
+
+                # 🔹 3. Segmentacja sekwencji
+                if hasattr(self.gui, "segment_df") and not self.gui.segment_df.empty:
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    ax.axis('off')
+                    table = ax.table(cellText=self.gui.segment_df.values,
+                                    colLabels=self.gui.segment_df.columns,
+                                    loc='center')
+                    table.auto_set_font_size(False)
+                    table.set_fontsize(8)
+                    ax.set_title("Segmentacja sekwencji i zawartość GC", pad=20)  # pad przesuwa tytuł wyżej
+                    pdf.savefig(fig)
+                    plt.close(fig)
+
+                # 🔹 4. Wykresy – po kolei
+                self.gui.wykresy.plot_bar_chart()
+                pdf.savefig(self.gui.wykresy.gui.bar_canvas.figure)
+
+                self.gui.wykresy.plot_heatmap_visualization()
+                pdf.savefig(self.gui.wykresy.gui.heatmap_canvas.figure)
+
+                self.gui.wykresy.plot_motif_positions_visualization()
+                pdf.savefig(self.gui.wykresy.gui.position_canvas.figure)
+
+            QMessageBox.information(
+                self.gui,
+                "Eksport PDF",
+                f"Raport zapisano do: {file_path}"
+            )
+            self.gui.log_output.append(f"Wyeksportowano raport PDF: {file_path}")
+
+        except Exception as e:
+            QMessageBox.critical(self.gui, "Błąd", f"Nie udało się zapisać PDF:\n{str(e)}")
+
+    def summarize_statistics(self):
+        if not hasattr(self.gui, "motif_df") or self.gui.motif_df.empty:
+            return pd.DataFrame()
+
+        pivot = self.gui.pivot_df.copy()
+        sequences = [s["sequence"] for s in self.gui.sequences]
+
+        summary = {
+            "Liczba sekwencji": len(sequences),
+            "Liczba aktywnych motywów": sum(m["active"] for m in self.gui.motifs),
+            "Średnia liczba motywów na sekwencję": pivot.iloc[:, 1:].sum(axis=1).mean(),
+            "Łączna liczba wszystkich motywów": pivot.iloc[:, 1:].sum().sum(),
+            "Długość sekwencji min": min(len(seq) for seq in sequences),
+            "Długość sekwencji max": max(len(seq) for seq in sequences),
+            "Długość sekwencji średnia": sum(len(seq) for seq in sequences)/len(sequences)
+        }
+
+        df_summary = pd.DataFrame([summary])
+        return df_summary
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
