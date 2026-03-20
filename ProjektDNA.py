@@ -115,6 +115,9 @@ class DNAAnalyzerGUI(QMainWindow):
             if name == "Eksportuj CSV/PDF":
                 btn.clicked.connect(self.show_export_options)
 
+            if name == "Pomoc":
+                btn.clicked.connect(self.pomoc)
+
         if self.load_button is not None:
             self.load_button.clicked.connect(self.load_sequence)
         else:
@@ -859,7 +862,30 @@ class DNAAnalyzerGUI(QMainWindow):
         elif clicked == pdf_button:
             self.report_exporter.export_pdf()
 
-import numpy as np
+
+    def pomoc(self):
+        # Wiadomość w HTML z formatowaniem
+        message = """
+        <b>Witaj! To jest program do analizy sekwencji DNA.</b><br><br>
+        Poniżej znajdziesz objaśnienia funkcjonowania programu:<br><br><ul>
+            <li><b>Wczytaj plik:</b> wpisz ręcznie sekwencję DNA korzystając z liter A, C, G lub T lub wczytaj plik fasta (.fasta, .fa, .txt)</li>
+            <li><b>NCBI:</b> przekierowuje na stronę NCBI (National Center for Biotechnology Information), na której można wyszukać sekwencję DNA</li>
+            <li><b>Pobierz z NCBI:</b> wpisz Accession number - unikalny identyfikator sekwencji DNA</li>
+            <li><b>Dodaj motyw:</b> wpisz ręcznie krótką sekwencję liter DNA używając liter A, C, G lub T</li>
+            <li><b>Uruchom analizę:</b> po poprawnym wprowadzeniu sekwencji DNA oraz motywów, program analizuje podane dane, a następnie generuje wyniki analizy</li>
+            <li><b>Eksportuj CSV/PDF:</b> program eksportuje uzyskane wyniki analizy w formie pliku CSV lub PDF</li>
+            <li><b>Podgląd sekwencji:</b> program wyświetla wprowadzoną sekwencję, możliwość usuwania/odznaczania aktywnej sekwencji</li>
+            <li><b>Wybór motywów:</b> program wyświetla wprowadzone motywy, możliwość usuwania/odznaczania aktywnych motywów</li>
+            <li><b>Wyniki analizy:</b> program wyświetla ilość motywów w sekwencji, wspólne i unikalne motywy, segmentację sekwencji pod względem par GC oraz podstawowe statystyki</li>
+            <li><b>Wizualizacja:</b> program wyświetla wykresy na podstawie przeprowadzonej analizy</li>
+        </ul>
+        """
+
+        msg = QMessageBox()
+        msg.setWindowTitle("Pomoc")
+        msg.setText(message)
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
 
 class Wykresy:
     def __init__(self, analyzer_gui):
