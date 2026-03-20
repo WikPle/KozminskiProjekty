@@ -484,15 +484,20 @@ class DNAAnalyzerGUI(QMainWindow):
 
     def remove_sequence(self, tab):
         index = self.sequence_tabs.indexOf(tab)
+
         if index != -1:
             self.sequence_tabs.removeTab(index)
 
-            self.sequences = [
-                seq for seq in self.sequences
-                if seq["tab"] != tab
-            ]
+            sequence = None
+            for seq in self.sequences:
+                if seq["tab"] == tab:
+                    sequence = seq
+                    break
 
-            self.log_output.append("Usunięto sekwencję.")
+            if sequence:
+                self.sequences = [seq for seq in self.sequences if seq["tab"] != tab]
+
+                self.log_output.append(f"Usunięto sekwencję: {sequence['name']}")
 
     def add_motif(self):
         motif, ok = QInputDialog.getText(
@@ -596,7 +601,6 @@ class DNAAnalyzerGUI(QMainWindow):
                 )
                 cursor.setCharFormat(fmt)
 
-                # non-overlapping
                 start = pos + motif_len
 
     def delete_motif_inline(self, motif_data):
