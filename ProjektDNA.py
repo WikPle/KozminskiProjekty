@@ -219,6 +219,14 @@ class DNAAnalyzerGUI(QMainWindow):
         segment_layout.addWidget(self.segment_table)
         self.analysis_tabs.addTab(self.segment_results_tab, "Segmentacja GC")
 
+        # --- TAB 4 STATISTICS ---
+        self.summary_stats_table_tab = QWidget()
+        self.summary_stats_table_layout = QVBoxLayout()
+        self.summary_stats_table_tab.setLayout(self.summary_stats_table_layout)
+        self.summary_stats_table = QTableWidget()
+        segment_layout.addWidget(self.summary_stats_table)
+        self.analysis_tabs.addTab(self.summary_stats_table, "Podsumowanie statystyk")
+
 
         self.analysis_layout.addWidget(self.analysis_tabs)
 
@@ -673,8 +681,12 @@ class DNAAnalyzerGUI(QMainWindow):
         summary_df = self.analyze_motifs_summary(self.pivot_df)
         self.populate_table(self.summary_table, summary_df)
 
+        summary_stats_df = self.summarize_statistics()
+        self.populate_table(self.summary_stats_table, summary_stats_df)
+
         if not segment_df.empty:
             self.populate_table(self.segment_table, segment_df)
+
 
         self.show_results()
 
@@ -761,6 +773,26 @@ class DNAAnalyzerGUI(QMainWindow):
             })
 
         return pd.DataFrame(results)
+
+    def summarize_statistics(self):
+        if not hasattr(self, "motif_df") or self.motif_df.empty:
+            return pd.DataFrame()
+
+        pivot = self.pivot_df.copy()
+        sequences = [s["sequence"] for s in self.sequences]
+
+        summary = {
+            "Liczba sek.": len(sequences),
+            "Liczba motywów": sum(m["active"] for m in self.motifs),
+            "Średnia liczba motywów na sekwencję": pivot.iloc[:, 1:].sum(axis=1).mean(),
+            "Łączna liczba wszystkich motywów": pivot.iloc[:, 1:].sum().sum(),
+            "Min długość": min(len(seq) for seq in sequences),
+            "Max długość": max(len(seq) for seq in sequences),
+            "Średnia długość": sum(len(seq) for seq in sequences)/len(sequences)
+        }
+
+        df_summary = pd.DataFrame([summary])
+        return df_summary
 
     def populate_table(self, table, df):
 
@@ -863,7 +895,6 @@ class Wykresy:
         fig.tight_layout()
         self.gui.bar_canvas.draw()
 
-        # ustawienie minimalnego rozmiaru, aby scroll działał
         self.gui.bar_canvas.setMinimumHeight(max(400, len(pivot)*50))
 
     def plot_heatmap_visualization(self):
@@ -909,7 +940,6 @@ class Wykresy:
         fig.subplots_adjust(left=0.1, right=0.9, top=0.95, bottom=0.1, hspace=0.5)
         self.gui.heatmap_canvas.draw()
 
-        # ustawienie minimalnego rozmiaru canvas, aby scroll działał
         self.gui.heatmap_canvas.setMinimumHeight(max(400, n*200))
 
     def plot_motif_positions_visualization(self):
@@ -952,7 +982,6 @@ class Wykresy:
         fig.subplots_adjust(left=0.07, right=0.8, top=0.95, bottom=0.05, hspace=0.5)
         self.gui.position_canvas.draw()
 
-        # ustawienie minimalnego rozmiaru canvas, aby scroll działał
         self.gui.position_canvas.setMinimumHeight(max(400, n*200))
 
 class RaportExporter:
@@ -975,15 +1004,12 @@ class RaportExporter:
             return
 
         try:
-            # 🔹 Zapis podsumowania statystyk
             summary_df = self.summarize_statistics()
             summary_df.to_csv(file_path, index=False)
 
-            # 🔹 Zapis pivot_df (liczba motywów na sekwencję)
             pivot_file = file_path.replace(".csv", "_motywy.csv")
             self.gui.pivot_df.to_csv(pivot_file, index=False)
 
-            # 🔹 Zapis segment_df (segmentacja i GC)
             if hasattr(self.gui, "segment_df") and not self.gui.segment_df.empty:
                 segment_file = file_path.replace(".csv", "_segmenty.csv")
                 self.gui.segment_df.to_csv(segment_file, index=False)
@@ -1015,35 +1041,33 @@ class RaportExporter:
 
         try:
             with PdfPages(file_path) as pdf:
+                summary_stats_df = self.gui.summarize_statistics()  # Pobieranie podsumowania statystyk
 
-                fig, ax = plt.subplots(figsize=(8, 6))
-                ax.axis('off')
-                summary_df = self.summarize_statistics()
+                if not summary_stats_df.empty:
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    ax.axis('off')
 
-                if summary_df.empty:
-                    raise ValueError("Brak danych do podsumowania.")
+                    rows, cols = summary_stats_df.shape
+                    fig.set_size_inches(min(20, max(8, cols * 1.2)),
+                                        min(20, max(6, rows * 0.6)))
 
-                rows, cols = summary_df.shape
-                fig.set_size_inches(min(20, max(8, cols * 1.2)),
-                                    min(20, max(6, rows * 0.6)))
+                    table = ax.table(
+                        cellText=summary_stats_df.values,
+                        colLabels=summary_stats_df.columns,
+                        cellLoc='center',
+                        colLoc='center',
+                        loc='center'
+                    )
 
-                table = ax.table(
-                    cellText=summary_df.values,
-                    colLabels=summary_df.columns,
-                    cellLoc='center',
-                    colLoc='center',
-                    loc='center'
-                )
+                    fontsize = max(6, min(12, 20 / max(rows, cols)))
+                    table.auto_set_font_size(False)
+                    table.set_fontsize(fontsize)
+                    table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
 
-                fontsize = max(6, min(12, 20 / max(rows, cols)))
-                table.auto_set_font_size(False)
-                table.set_fontsize(fontsize)
-                table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
-
-                plt.tight_layout()
-                ax.set_title("Podsumowanie statystyk")
-                pdf.savefig(fig)
-                plt.close(fig)
+                    plt.tight_layout()
+                    ax.set_title("Podsumowanie statystyk")
+                    pdf.savefig(fig)
+                    plt.close(fig)
 
                 fig, ax = plt.subplots(figsize=(10, 6))
                 ax.axis('off')
@@ -1114,26 +1138,6 @@ class RaportExporter:
 
         except Exception as e:
             QMessageBox.critical(self.gui, "Błąd", f"Nie udało się zapisać PDF:\n{str(e)}")
-
-    def summarize_statistics(self):
-        if not hasattr(self.gui, "motif_df") or self.gui.motif_df.empty:
-            return pd.DataFrame()
-
-        pivot = self.gui.pivot_df.copy()
-        sequences = [s["sequence"] for s in self.gui.sequences]
-
-        summary = {
-            "Liczba sekwencji": len(sequences),
-            "Liczba aktywnych motywów": sum(m["active"] for m in self.gui.motifs),
-            "Średnia liczba motywów na sekwencję": pivot.iloc[:, 1:].sum(axis=1).mean(),
-            "Łączna liczba wszystkich motywów": pivot.iloc[:, 1:].sum().sum(),
-            "Długość sekwencji min": min(len(seq) for seq in sequences),
-            "Długość sekwencji max": max(len(seq) for seq in sequences),
-            "Długość sekwencji średnia": sum(len(seq) for seq in sequences)/len(sequences)
-        }
-
-        df_summary = pd.DataFrame([summary])
-        return df_summary
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
