@@ -1002,52 +1002,86 @@ class RaportExporter:
         try:
             with PdfPages(file_path) as pdf:
 
-                # 🔹 1. Podsumowanie statystyk
                 fig, ax = plt.subplots(figsize=(8, 6))
                 ax.axis('off')
                 summary_df = self.summarize_statistics()
+
+                if summary_df.empty:
+                    raise ValueError("Brak danych do podsumowania.")
+
+                rows, cols = summary_df.shape
+                fig.set_size_inches(min(20, max(8, cols * 1.2)),
+                                    min(20, max(6, rows * 0.6)))
+
                 table = ax.table(
                     cellText=summary_df.values,
                     colLabels=summary_df.columns,
-                    cellLoc='center',      # wyśrodkowanie tekstu w komórkach
-                    colLoc='center',       # wyśrodkowanie nagłówków
+                    cellLoc='center',
+                    colLoc='center',
                     loc='center'
                 )
+
+                fontsize = max(6, min(12, 20 / max(rows, cols)))
                 table.auto_set_font_size(False)
-                table.set_fontsize(8)      # zmniejszenie czcionki nagłówków
-                table.scale(1, 1.2)        # skala X,Y dla tabeli (np. wyższa wysokość wierszy)
-                table.auto_set_font_size(False)
-                table.set_fontsize(10)
+                table.set_fontsize(fontsize)
+                table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
+
+                plt.tight_layout()
                 ax.set_title("Podsumowanie statystyk")
                 pdf.savefig(fig)
                 plt.close(fig)
 
-                # 🔹 2. Pivot motywów
                 fig, ax = plt.subplots(figsize=(10, 6))
                 ax.axis('off')
-                table = ax.table(cellText=self.gui.pivot_df.values,
-                                colLabels=self.gui.pivot_df.columns,
-                                loc='center')
+
+                rows, cols = self.gui.pivot_df.shape
+                fig.set_size_inches(min(20, max(8, cols * 1.2)),
+                                    min(20, max(6, rows * 0.4)))
+
+                table = ax.table(
+                    cellText=self.gui.pivot_df.values,
+                    colLabels=self.gui.pivot_df.columns,
+                    cellLoc='center',
+                    colLoc='center',
+                    loc='center'
+                )
+
+                fontsize = max(6, min(12, 20 / max(rows, cols)))
                 table.auto_set_font_size(False)
-                table.set_fontsize(8)
+                table.set_fontsize(fontsize)
+                table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
+
+                plt.tight_layout()
                 ax.set_title("Liczba motywów w sekwencjach")
                 pdf.savefig(fig)
                 plt.close(fig)
 
-                # 🔹 3. Segmentacja sekwencji
                 if hasattr(self.gui, "segment_df") and not self.gui.segment_df.empty:
                     fig, ax = plt.subplots(figsize=(10, 6))
                     ax.axis('off')
-                    table = ax.table(cellText=self.gui.segment_df.values,
-                                    colLabels=self.gui.segment_df.columns,
-                                    loc='center')
+
+                    rows, cols = self.gui.segment_df.shape
+                    fig.set_size_inches(min(20, max(8, cols * 1.2)),
+                                        min(20, max(6, rows * 0.4)))
+
+                    table = ax.table(
+                        cellText=self.gui.segment_df.values,
+                        colLabels=self.gui.segment_df.columns,
+                        cellLoc='center',
+                        colLoc='center',
+                        loc='center'
+                    )
+
+                    fontsize = max(6, min(12, 20 / max(rows, cols)))
                     table.auto_set_font_size(False)
-                    table.set_fontsize(8)
-                    ax.set_title("Segmentacja sekwencji i zawartość GC", pad=20)  # pad przesuwa tytuł wyżej
+                    table.set_fontsize(fontsize)
+                    table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
+
+                    plt.tight_layout()
+                    ax.set_title("Segmentacja sekwencji i zawartość GC", pad=20)
                     pdf.savefig(fig)
                     plt.close(fig)
 
-                # 🔹 4. Wykresy – po kolei
                 self.gui.wykresy.plot_bar_chart()
                 pdf.savefig(self.gui.wykresy.gui.bar_canvas.figure)
 
