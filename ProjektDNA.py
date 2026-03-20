@@ -755,7 +755,6 @@ class DNAAnalyzerGUI(QMainWindow):
             "Motywy": ", ".join(common) if common else "Brak"
         })
 
-        # 🔹 unikalne
         for col in df.columns:
             unique = df[
                 (df[col] > 0) &
