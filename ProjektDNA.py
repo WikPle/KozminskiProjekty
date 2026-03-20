@@ -14,13 +14,14 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_pdf import PdfPages
 
 class DNAAnalyzerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("DNA Analyzer - PyQt6 GUI")
         self.setMinimumSize(1000, 700)
-        self.motifs = []
+        self.motifs_data = []
         self.wykresy = Wykresy(self)
         self.report_exporter = RaportExporter(self)
         self.manual_sequence_counter = 1
@@ -935,11 +936,6 @@ class Wykresy:
 
         fig.subplots_adjust(left=0.07, right=0.8, top=0.95, bottom=0.05, hspace=0.5)
         self.gui.position_canvas.draw()
-
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 class RaportExporter:
     def __init__(self, gui):
