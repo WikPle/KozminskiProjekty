@@ -231,43 +231,50 @@ class DNAAnalyzerGUI(QMainWindow):
 
         # -------- Widok 4: Wizualizacja --------
         self.visualization_view = QWidget()
-        self.visual_layout = QVBoxLayout()
-        self.visualization_view.setLayout(self.visual_layout)
+        self.visual_layout = QVBoxLayout(self.visualization_view)
 
         # zakładki wizualizacji
         self.visual_tabs = QTabWidget()
 
         # --- TAB 1 BAR CHART ---
-        self.bar_tab = QWidget()
-        bar_layout = QVBoxLayout()
-        self.bar_tab.setLayout(bar_layout)
-
+        self.bar_tab_content = QWidget()
+        bar_layout = QVBoxLayout(self.bar_tab_content)
         self.bar_canvas = FigureCanvas(plt.figure())
         bar_layout.addWidget(self.bar_canvas)
 
-        # --- TAB 2 HEATMAP ---
-        self.heatmap_tab = QWidget()
-        heatmap_layout = QVBoxLayout()
-        self.heatmap_tab.setLayout(heatmap_layout)
+        self.bar_tab_scroll = QScrollArea()
+        self.bar_tab_scroll.setWidgetResizable(True)
+        self.bar_tab_scroll.setWidget(self.bar_tab_content)
 
+        # --- TAB 2 HEATMAP ---
+        self.heatmap_tab_content = QWidget()
+        heatmap_layout = QVBoxLayout(self.heatmap_tab_content)
         self.heatmap_canvas = FigureCanvas(plt.figure())
         heatmap_layout.addWidget(self.heatmap_canvas)
 
-        # --- TAB 3 MOTIF POSITIONS ---
-        self.position_tab = QWidget()
-        position_layout = QVBoxLayout()
-        self.position_tab.setLayout(position_layout)
+        self.heatmap_tab_scroll = QScrollArea()
+        self.heatmap_tab_scroll.setWidgetResizable(True)
+        self.heatmap_tab_scroll.setWidget(self.heatmap_tab_content)
 
+        # --- TAB 3 MOTIF POSITIONS ---
+        self.position_tab_content = QWidget()
+        position_layout = QVBoxLayout(self.position_tab_content)
         self.position_canvas = FigureCanvas(plt.figure())
         position_layout.addWidget(self.position_canvas)
 
-        # dodanie zakładek
-        self.visual_tabs.addTab(self.bar_tab, "Wykres motywów")
-        self.visual_tabs.addTab(self.heatmap_tab, "Heatmapa")
-        self.visual_tabs.addTab(self.position_tab, "Pozycje motywów")
+        self.position_tab_scroll = QScrollArea()
+        self.position_tab_scroll.setWidgetResizable(True)
+        self.position_tab_scroll.setWidget(self.position_tab_content)
 
+        # dodanie zakładek (scroll area jako zawartość)
+        self.visual_tabs.addTab(self.bar_tab_scroll, "Wykres motywów")
+        self.visual_tabs.addTab(self.heatmap_tab_scroll, "Heatmapa")
+        self.visual_tabs.addTab(self.position_tab_scroll, "Pozycje motywów")
+
+        # dodanie zakładek do głównego layoutu
         self.visual_layout.addWidget(self.visual_tabs)
 
+        # dodanie całego widoku do stacked widget
         self.stacked_widget.addWidget(self.visualization_view)
 
         # =========================
@@ -830,6 +837,8 @@ class DNAAnalyzerGUI(QMainWindow):
         elif clicked == pdf_button:
             self.report_exporter.export_pdf()
 
+import numpy as np
+
 class Wykresy:
     def __init__(self, analyzer_gui):
         self.gui = analyzer_gui  # referencja do głównej klasy GUI
@@ -854,6 +863,9 @@ class Wykresy:
         fig.tight_layout()
         self.gui.bar_canvas.draw()
 
+        # ustawienie minimalnego rozmiaru, aby scroll działał
+        self.gui.bar_canvas.setMinimumHeight(max(400, len(pivot)*50))
+
     def plot_heatmap_visualization(self):
         active_sequences = [seq for seq in self.gui.sequences if seq["checkbox"].isChecked()]
         motifs = [m["sequence"] for m in self.gui.motifs if m["active"]]
@@ -864,7 +876,7 @@ class Wykresy:
         fig = self.gui.heatmap_canvas.figure
         fig.clear()
         n = len(active_sequences)
-        fig.set_size_inches(10, max(4, 3 * n))
+        fig.set_size_inches(10, 3*n)
 
         for idx, seq_data in enumerate(active_sequences):
             sequence = seq_data["sequence"]
@@ -897,6 +909,9 @@ class Wykresy:
         fig.subplots_adjust(left=0.1, right=0.9, top=0.95, bottom=0.1, hspace=0.5)
         self.gui.heatmap_canvas.draw()
 
+        # ustawienie minimalnego rozmiaru canvas, aby scroll działał
+        self.gui.heatmap_canvas.setMinimumHeight(max(400, n*200))
+
     def plot_motif_positions_visualization(self):
         active_sequences = [seq for seq in self.gui.sequences if seq["checkbox"].isChecked()]
         motifs = [m["sequence"] for m in self.gui.motifs if m["active"]]
@@ -907,7 +922,7 @@ class Wykresy:
         fig = self.gui.position_canvas.figure
         fig.clear()
         n = len(active_sequences)
-        fig.set_size_inches(10, max(4, 3 * n))
+        fig.set_size_inches(10, 3*n)
 
         for idx, seq_data in enumerate(active_sequences):
             sequence = seq_data["sequence"]
@@ -936,6 +951,9 @@ class Wykresy:
 
         fig.subplots_adjust(left=0.07, right=0.8, top=0.95, bottom=0.05, hspace=0.5)
         self.gui.position_canvas.draw()
+
+        # ustawienie minimalnego rozmiaru canvas, aby scroll działał
+        self.gui.position_canvas.setMinimumHeight(max(400, n*200))
 
 class RaportExporter:
     def __init__(self, gui):
