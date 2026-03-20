@@ -274,15 +274,11 @@ class DNAAnalyzerGUI(QMainWindow):
         self.position_tab_scroll.setWidgetResizable(True)
         self.position_tab_scroll.setWidget(self.position_tab_content)
 
-        # dodanie zakładek (scroll area jako zawartość)
         self.visual_tabs.addTab(self.bar_tab_scroll, "Wykres motywów")
         self.visual_tabs.addTab(self.heatmap_tab_scroll, "Heatmapa")
         self.visual_tabs.addTab(self.position_tab_scroll, "Pozycje motywów")
 
-        # dodanie zakładek do głównego layoutu
         self.visual_layout.addWidget(self.visual_tabs)
-
-        # dodanie całego widoku do stacked widget
         self.stacked_widget.addWidget(self.visualization_view)
 
         # =========================
@@ -571,8 +567,6 @@ class DNAAnalyzerGUI(QMainWindow):
     def highlight_motifs(self, text_edit, sequence, motif_color_map):
 
         cursor = text_edit.textCursor()
-
-        # reset formatowania
         cursor.select(QTextCursor.SelectionType.Document)
         cursor.setCharFormat(QTextCharFormat())
 
@@ -748,7 +742,6 @@ class DNAAnalyzerGUI(QMainWindow):
 
         results = []
 
-        # 🔹 wspólne
         common = df[(df > 0).all(axis=1)].index.tolist()
 
         results.append({
@@ -873,7 +866,7 @@ import numpy as np
 
 class Wykresy:
     def __init__(self, analyzer_gui):
-        self.gui = analyzer_gui  # referencja do głównej klasy GUI
+        self.gui = analyzer_gui
 
     def plot_bar_chart(self):
         fig = self.gui.bar_canvas.figure
@@ -1041,7 +1034,7 @@ class RaportExporter:
 
         try:
             with PdfPages(file_path) as pdf:
-                summary_stats_df = self.gui.summarize_statistics()  # Pobieranie podsumowania statystyk
+                summary_stats_df = self.gui.summarize_statistics()
 
                 if not summary_stats_df.empty:
                     fig, ax = plt.subplots(figsize=(8, 6))
@@ -1060,7 +1053,7 @@ class RaportExporter:
                     )
 
                     fontsize = max(6, min(12, 20 / max(rows, cols)))
-                    table.auto_set_font_size(False)
+                    table.auto_set_font_size(True)
                     table.set_fontsize(fontsize)
                     table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
 
@@ -1085,7 +1078,7 @@ class RaportExporter:
                 )
 
                 fontsize = max(6, min(12, 20 / max(rows, cols)))
-                table.auto_set_font_size(False)
+                table.auto_set_font_size(True)
                 table.set_fontsize(fontsize)
                 table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
 
@@ -1095,30 +1088,35 @@ class RaportExporter:
                 plt.close(fig)
 
                 if hasattr(self.gui, "segment_df") and not self.gui.segment_df.empty:
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    ax.axis('off')
+                                segment_df = self.gui.segment_df
+                                page_limit = 20
 
-                    rows, cols = self.gui.segment_df.shape
-                    fig.set_size_inches(min(20, max(8, cols * 1.2)),
-                                        min(20, max(6, rows * 0.4)))
+                                total_pages = (len(segment_df) // page_limit) + (1 if len(segment_df) % page_limit > 0 else 0)
+                                for page_num in range(total_pages):
+                                    fig, ax = plt.subplots(figsize=(10, 6))
+                                    ax.axis('off')
 
-                    table = ax.table(
-                        cellText=self.gui.segment_df.values,
-                        colLabels=self.gui.segment_df.columns,
-                        cellLoc='center',
-                        colLoc='center',
-                        loc='center'
-                    )
+                                    start_row = page_num * page_limit
+                                    end_row = min((page_num + 1) * page_limit, len(segment_df))
+                                    page_segment_df = segment_df.iloc[start_row:end_row]
 
-                    fontsize = max(6, min(12, 20 / max(rows, cols)))
-                    table.auto_set_font_size(False)
-                    table.set_fontsize(fontsize)
-                    table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
+                                    table = ax.table(
+                                        cellText=page_segment_df.values,
+                                        colLabels=page_segment_df.columns,
+                                        cellLoc='center',
+                                        colLoc='center',
+                                        loc='center'
+                                    )
 
-                    plt.tight_layout()
-                    ax.set_title("Segmentacja sekwencji i zawartość GC", pad=20)
-                    pdf.savefig(fig)
-                    plt.close(fig)
+                                    fontsize = max(6, min(12, 20 / max(page_segment_df.shape[0], page_segment_df.shape[1])))
+                                    table.auto_set_font_size(False)
+                                    table.set_fontsize(fontsize)
+                                    table.scale(min(1.5, 20 / page_segment_df.shape[1]), min(1.5, 20 / page_segment_df.shape[0]))
+
+                                    plt.tight_layout()
+                                    ax.set_title(f"Segmentacja sekwencji i zawartość GC – Strona {page_num + 1}", pad=20)
+                                    pdf.savefig(fig)
+                                    plt.close(fig)
 
                 self.gui.wykresy.plot_bar_chart()
                 pdf.savefig(self.gui.wykresy.gui.bar_canvas.figure)
