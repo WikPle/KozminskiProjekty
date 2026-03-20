@@ -864,7 +864,6 @@ class DNAAnalyzerGUI(QMainWindow):
 
 
     def pomoc(self):
-        # Wiadomość w HTML z formatowaniem
         message = """
         <b>Witaj! To jest program do analizy sekwencji DNA.</b><br><br>
         Poniżej znajdziesz objaśnienia funkcjonowania programu:<br><br><ul>
@@ -886,6 +885,7 @@ class DNAAnalyzerGUI(QMainWindow):
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec()
+        self.log_output.append(f"Otwarto Pomoc")
 
 class Wykresy:
     def __init__(self, analyzer_gui):
