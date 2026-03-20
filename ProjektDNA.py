@@ -21,7 +21,7 @@ class DNAAnalyzerGUI(QMainWindow):
         super().__init__()
         self.setWindowTitle("DNA Analyzer - PyQt6 GUI")
         self.setMinimumSize(1000, 700)
-        self.motifs_data = []
+        self.motifs = []
         self.wykresy = Wykresy(self)
         self.report_exporter = RaportExporter(self)
         self.manual_sequence_counter = 1
