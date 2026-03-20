@@ -681,9 +681,6 @@ class DNAAnalyzerGUI(QMainWindow):
         if not segment_df.empty:
             self.populate_table(self.segment_table, segment_df)
 
-
-        self.show_results()
-
         self.log_output.append("Analiza zakończona.")
 
     def find_motifs(self, sequence, motifs):
