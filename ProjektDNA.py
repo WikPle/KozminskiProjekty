@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_pdf import PdfPages
+
 
 class DNAAnalyzerGUI(QMainWindow):
     def __init__(self):
@@ -1049,6 +1049,7 @@ class RaportExporter:
             QMessageBox.critical(self.gui, "Błąd", f"Nie udało się zapisać CSV:\n{str(e)}")
 
     def export_pdf(self):
+        from matplotlib.backends.backend_pdf import PdfPages
         if not hasattr(self.gui, "motif_df") or self.gui.motif_df.empty:
             QMessageBox.warning(self.gui, "Błąd", "Brak danych do raportu.")
             return
@@ -1117,6 +1118,34 @@ class RaportExporter:
                 ax.set_title("Liczba motywów w sekwencjach")
                 pdf.savefig(fig)
                 plt.close(fig)
+
+                summary_df = self.gui.analyze_motifs_summary(self.gui.pivot_df)
+
+                if not summary_df.empty:
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    ax.axis('off')
+
+                    rows, cols = summary_df.shape
+                    fig.set_size_inches(min(20, max(8, cols * 1.2)),
+                                        min(20, max(6, rows * 0.5)))
+
+                    table = ax.table(
+                        cellText=summary_df.values,
+                        colLabels=summary_df.columns,
+                        cellLoc='center',
+                        colLoc='center',
+                        loc='center'
+                    )
+
+                    fontsize = max(6, min(12, 20 / max(rows, cols)))
+                    table.auto_set_font_size(True)
+                    table.set_fontsize(fontsize)
+                    table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
+
+                    plt.tight_layout()
+                    ax.set_title("Podsumowanie motywów")
+                    pdf.savefig(fig)
+                    plt.close(fig)
 
                 if hasattr(self.gui, "segment_df") and not self.gui.segment_df.empty:
                                 segment_df = self.gui.segment_df
