@@ -332,23 +332,27 @@ class DNAAnalyzerGUI(QMainWindow):
             return
 
         try:
-            with open(file_path, "r") as file:
-                lines = file.readlines()
+            records = SeqIO.parse(file_path, "fasta-blast")
 
-            sequence = ""
-            for line in lines:
-                if not line.startswith(">"):
-                    sequence += line.strip()
+            count = 0
 
-            sequence = sequence.upper()
+            for record in records:
+                sequence = str(record.seq).upper()
 
-            if not self.validate_sequence(sequence):
-                QMessageBox.warning(self, "Błąd", "Niepoprawne znaki DNA.")
+                if not self.validate_sequence(sequence):
+                    self.log_output.append(f"Pominięto {record.id} – niepoprawne znaki")
+                    continue
+
+                title = record.id if record.id else f"Sekwencja_{count+1}"
+
+                self.add_sequence_tab(sequence, title=title)
+                count += 1
+
+            if count == 0:
+                QMessageBox.warning(self, "Błąd", "Nie znaleziono poprawnych sekwencji.")
                 return
 
-            self.add_sequence_tab(sequence, title="FASTA")
-            self.log_output.append(f"Wczytano plik: {file_path}")
-            self.log_output.append(f"Długość sekwencji: {len(sequence)}")
+            self.log_output.append(f"Wczytano {count} sekwencji z pliku: {file_path}")
 
         except Exception as e:
             QMessageBox.critical(self, "Błąd", str(e))
@@ -698,7 +702,6 @@ class DNAAnalyzerGUI(QMainWindow):
 
             count = 0
             start = 0
-            motif_len = len(motif)
 
             while True:
 
@@ -709,7 +712,7 @@ class DNAAnalyzerGUI(QMainWindow):
 
                 count += 1
 
-                start = pos + motif_len
+                start = pos + 1
 
             results[motif] = count
 
@@ -726,8 +729,10 @@ class DNAAnalyzerGUI(QMainWindow):
             segment = seq_array[i:i+window_size]
 
             segment_str = "".join(segment)
-
-            gc = (segment_str.count("G") + segment_str.count("C")) / len(segment_str)
+            if len(segment_str) == 0:
+                gc = 0
+            else:
+                gc = (segment_str.count("G") + segment_str.count("C")) / len(segment_str)
 
             segments.append({
                 "Początek": i,
@@ -780,7 +785,7 @@ class DNAAnalyzerGUI(QMainWindow):
         summary = {
             "Liczba sek.": len(sequences),
             "Liczba motywów": sum(m["active"] for m in self.motifs),
-            "Średnia liczba motywów na sekwencję": pivot.iloc[:, 1:].sum(axis=1).mean(),
+            "Średnia liczba motywów na sekwencję": round(pivot.iloc[:, 1:].sum(axis=1).mean(), 2),
             "Łączna liczba wszystkich motywów": pivot.iloc[:, 1:].sum().sum(),
             "Min długość": min(len(seq) for seq in sequences),
             "Max długość": max(len(seq) for seq in sequences),
@@ -1023,7 +1028,7 @@ class RaportExporter:
             return
 
         try:
-            summary_df = self.summarize_statistics()
+            summary_df = self.gui.summarize_statistics()
             summary_df.to_csv(file_path, index=False)
 
             pivot_file = file_path.replace(".csv", "_motywy.csv")
