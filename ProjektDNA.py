@@ -1069,12 +1069,8 @@ class RaportExporter:
                 summary_stats_df = self.gui.summarize_statistics()
 
                 if not summary_stats_df.empty:
-                    fig, ax = plt.subplots(figsize=(8, 6))
+                    fig, ax = plt.subplots()
                     ax.axis('off')
-
-                    rows, cols = summary_stats_df.shape
-                    fig.set_size_inches(min(20, max(8, cols * 1.2)),
-                                        min(20, max(6, rows * 0.6)))
 
                     table = ax.table(
                         cellText=summary_stats_df.values,
@@ -1084,12 +1080,6 @@ class RaportExporter:
                         loc='center'
                     )
 
-                    fontsize = max(6, min(12, 20 / max(rows, cols)))
-                    table.auto_set_font_size(True)
-                    table.set_fontsize(fontsize)
-                    table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
-
-                    plt.tight_layout()
                     ax.set_title("Podsumowanie statystyk")
                     pdf.savefig(fig)
                     plt.close(fig)
@@ -1114,7 +1104,7 @@ class RaportExporter:
                 table.set_fontsize(fontsize)
                 table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
 
-                plt.tight_layout()
+                plt.tight_layout(rect=[0, 0, 1, 0.95])
                 ax.set_title("Liczba motywów w sekwencjach")
                 pdf.savefig(fig)
                 plt.close(fig)
@@ -1142,7 +1132,7 @@ class RaportExporter:
                     table.set_fontsize(fontsize)
                     table.scale(min(1.5, 20 / cols), min(1.5, 20 / rows))
 
-                    plt.tight_layout()
+                    plt.tight_layout(rect=[0, 0, 1, 0.95])
                     ax.set_title("Podsumowanie motywów")
                     pdf.savefig(fig)
                     plt.close(fig)
@@ -1171,9 +1161,7 @@ class RaportExporter:
                                     fontsize = max(6, min(12, 20 / max(page_segment_df.shape[0], page_segment_df.shape[1])))
                                     table.auto_set_font_size(False)
                                     table.set_fontsize(fontsize)
-                                    table.scale(min(1.5, 20 / page_segment_df.shape[1]), min(1.5, 20 / page_segment_df.shape[0]))
 
-                                    plt.tight_layout()
                                     ax.set_title(f"Segmentacja sekwencji i zawartość GC – Strona {page_num + 1}", pad=20)
                                     pdf.savefig(fig)
                                     plt.close(fig)
